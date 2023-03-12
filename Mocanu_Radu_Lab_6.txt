@@ -1,0 +1,217 @@
+--Exercise 1 
+
+create table dept_rm as select * from departments;
+
+create or replace trigger trig_SCOTT
+    before delete on dept_rm
+  begin 
+    if user  != 'SCOTT' then 
+       RAISE_APPLICATION_ERROR(-20900,'Doar Scott are voie sa stearga');
+    end if;
+    
+end;
+
+drop trigger trig_SCOTT;
+delete from dept_rm where department_id = 40;
+
+--Exercie 2
+select * from emp_rm;
+create or replace trigger comison
+  before update of commission_pct on emp_rm 
+  for each row 
+ begin
+  if (:new.commission_pct >= 0.5) then
+     RAISE_APPLICATION_ERROR(-20900,'Comisionul nu poate fi mai mult decat jumatate din salariu');
+  end if;
+  
+end;
+
+update emp_rm set commission_pct = 0.4 where employee_id = 101;
+
+--Exercise 3
+
+--a)
+select * from dept_rm;
+create table info_dept_rm (
+department_id int,
+numar int
+);
+declare
+  emp_number int;
+begin
+  for row_entry in (select department_id from dept_rm) loop 
+   select count(*) into emp_number from emp_rm e where e.department_id = row_entry.department_id;
+   insert into info_dept_rm values (row_entry.department_id, emp_number);
+  end loop;
+end;
+select * from info_dept_rm;
+
+--b)
+drop table info_emp_rm;
+update info_emp_rm set department_id = 60 where employee_id = 20;
+select * from info_emp_rm where department_id = 40;
+drop table emp_rm;
+select * from info_emp_rm;
+select * from info_dept_rm;
+
+create table info_emp_rm as select employee_id, first_name, last_name, email, hire_date, job_id, salary, department_id  from emp_rm;
+create or replace trigger setEmpNumber
+  after update or delete or insert on info_emp_rm
+  for each row 
+  begin
+    if deleting then update info_dept_rm i set numar = numar - 1 where i.department_id = :old.department_id;
+    end if;
+    if updating then update info_dept_rm i set numar = numar + 1 where i.department_id = :new.department_id;
+    update info_dept_rm i set numar = numar - 1 where i.department_id = :old.department_id;
+    end if;
+     if inserting then update info_dept_mac set numar = numar + 1 where department_id = :new.department_id;
+    end if;
+end; 
+
+--4
+drop trigger max45emp;
+create or replace trigger max45emp
+  before update or insert on info_emp_rm
+  for each row
+  declare
+    emp_number int;
+  begin
+  select numar into emp_number from info_dept_rm i where i.department_id = :new.department_id; 
+  dbms_output.put_line(emp_number);
+  if emp_number>44 then
+     RAISE_APPLICATION_ERROR(-20900,'In niciun departament nu pot fi mai mult de 45 de persoane!');
+  end if;
+end;
+select * from info_dept_rm;
+select * from info_emp_rm;
+update info_emp_rm set department_id = 70  where employee_id = 104;
+delete from info_emp_rm where employee_id = 103;
+
+
+
+--Exercise 5 
+
+--a)
+create table emp_test_rm as select employee_id, last_name, first_name, department_id from emp_rm;
+select * from emp_test_rm;
+alter table emp_test_rm add primary key (employee_id);
+desc emp_test_rm;
+
+create table dept_test_rm as select department_id, department_name from dept_rm;
+select * from dept_test_rm;
+alter table dept_test_rm add primary key (department_id);
+desc dept_test_rm;
+
+--b)
+--nu este definita constrangere de cheie externa intre cele doua tabele 
+create or replace trigger deleteEmpCascade
+  after delete on dept_test_rm
+  for each row
+  begin 
+    delete from emp_test_rm e where e.department_id = :old.department_id;  
+end;
+
+drop trigger deleteEmpCascade;
+
+delete from dept_test_rm where department_id = 70;
+
+
+
+create or replace trigger setEmpDepartmentCascade
+  after update on dept_test_rm
+  for each row
+  begin 
+    update emp_test_rm e set department_id = :new.department_id where e.department_id = :old.department_id;  
+end;
+
+drop trigger setEmpDepartmentCascade;
+
+update dept_test_rm set department_id = 45 where department_id = 40;
+commit;
+
+
+--este definita constrangerea de cheie externa intre cele doua tabel
+
+create table dept_test_rm2 as select department_id, department_name from dept_test_rm;
+create table emp_test_rm2 as select employee_id, last_name, first_name, department_id from emp_test_rm;
+alter table emp_test_rm2 add primary key (employee_id);
+alter table dept_test_rm2 add primary key (department_id);
+DELETE FROM emp_test_rm2 e WHERE department_id NOT IN (SELECT department_id FROM dept_test_rm2);
+
+alter table emp_test_rm2 add foreign key (department_id) references dept_test_rm2 (department_id) on delete cascade;
+
+create or replace trigger deleteEmpCascade
+  after delete on dept_test_rm2
+  for each row
+  begin 
+    delete from emp_test_rm2 e where e.department_id = :old.department_id;  
+end;
+
+--triggerul are outputul dorit
+
+
+select * from dept_test_rm2;
+select * from emp_test_rm2;
+delete from dept_test_rm2 where department_id = 40;
+
+create or replace trigger setEmpDepartmentCascade
+  after update on dept_test_rm2
+  for each row
+  begin 
+    update emp_test_rm2 e set department_id = :new.department_id where e.department_id = :old.department_id;  
+end;
+
+--triggerul are outputul dorit
+
+
+--este definita consttrangerea cu optiunea on delete cascade
+
+--intai am dat drop la constraintul anterior 
+alter table emp_test_rm2 add foreign key (department_id) references dept_test_rm2 (department_id) on delete cascade;
+delete from dept_test_rm2 where department_name='IT'; 
+--functioneaza doar daca dam drop la trigger (deoarece incearca sa stearga date dintr-un tabel ce se modifica)
+
+
+--este  definită  constrângereade  cheie  externă  între  cele  două  tabele  cu  opțiunea  ON DELETE SET NULL
+
+--intai am dat drop la constraintul anterior 
+
+alter table emp_test_rm2 add foreign key (department_id) references dept_test_rm2 (department_id) on delete set null;
+select * from dept_test_rm2;
+delete from dept_test_rm2 where department_name='Sales'; 
+
+-- am modificat triggerul anterior ( l-am facut sa stearga
+-- inregistrarile unde department_id este null, dupa ce toate stergerile au fost facute
+-- -> pentru ca tabelul sa nu fie muttating)
+-- functioneaza
+create or replace trigger deleteEmpCascade
+  after delete on dept_test_rm2
+  begin 
+    delete from emp_test_rm2 e where e.department_id is null;  
+end;
+
+create or replace trigger setEmpDepartmentCascade
+  after update on dept_test_rm2
+  for each row
+  begin 
+    update emp_test_rm2 e set department_id = :new.department_id where e.department_id = :old.department_id;  
+end;
+
+
+--Exercise 6 
+
+create table errors_rm (
+user_id varchar2(50),
+nume_bd varchar2(50),
+erori varchar2(1000),
+data date);
+drop table errors_rm;
+create trigger update_errors_rm
+after servererror on schema
+begin
+  insert into errors_rm values (SYS.LOGIN_USEr, sys.database_name, DBMS_UTILITY.FORMAT_ERROR_STACK, sysdate);
+end;
+drop trigger update_errors_rm;
+select * from errors_rm;
+drop trigger trig_ex6_mac;
+select * from gica; --getting an error because the table does not exist (it was added to the table)

@@ -1,0 +1,273 @@
+-- Tema lab 5
+-- Exercise 1
+--cursoarele de la subpunctele f si g au fost adaugate doar in definitia pachetului ( nu si in body )
+--a )
+-- sequence to auto-generate employee id
+create  sequence rm_sequence 
+start with 3000
+increment by 1
+minValue 3000
+maxValue 4000
+cycle;
+drop sequence rm_sequence;
+
+
+create or replace package pachet_rm as
+--a)
+  procedure adaugare_angajat (
+  nume employees.first_name%type,
+  prenume employees.last_name%type,
+  telefon employees.phone_number%type,
+  email employees.email%type,
+  numeDepartament departments.department_name%type,
+  firstNameManager employees.first_name%type,
+  lastNameManager employees.last_name%type,
+  numeJob jobs.job_title%type
+  );
+  -- b)
+  procedure schimbare_departament (
+  nume employees.first_name%type,
+  prenume employees.last_name%type,
+  numeDepartament departments.department_name%type,
+   numeJob jobs.job_title%type,
+   firstNameManager employees.first_name%type,
+  lastNameManager employees.last_name%type
+  );
+  
+  --c)
+  function numarSubalterni(nume employees.last_name%type, prenume employees.first_name%type) return number;
+  
+  
+  --d)
+  procedure promovareAngajat(
+  id_angajat employees.employee_id%type
+  );
+  
+  
+  --e)
+  procedure schimbare_salariu(
+  salariu employees.salary %type, 
+  nume employees.last_name%type);
+  
+  --f) 
+cursor lista_angajati(id_angajat employees.job_id%type)
+return employees%rowtype is
+select * from employees where job_id = id_angajat;
+
+--g)
+cursor lista_joburi return jobs%rowtype is
+    select * from jobs;
+  
+  function getMinSalary(
+  id_departament departments.department_id%type) return employees.salary%type;
+  function getManagerId(
+  nume employees.last_name%type,
+  prenume employees.first_name%type
+  ) return employees.manager_id%type;
+  function getDepartmentId(
+  nume departments.department_name%type
+  ) return employees.department_id%type;
+  function getJobId (
+  nume jobs.job_title%type) 
+  return employees.job_id%type;
+  end pachet_rm;
+
+  
+-- package body
+
+
+
+create or replace package body pachet_rm as 
+  procedure adaugare_angajat (
+  nume employees.first_name%type,
+  prenume employees.last_name%type,
+  telefon employees.phone_number%type,
+  email employees.email%type,
+  numeDepartament departments.department_name%type,
+  firstNameManager employees.first_name%type,
+  lastNameManager employees.last_name%type,
+  numeJob jobs.job_title%type
+  ) as
+  salariu employees.salary%type;
+  id_job employees.job_id%type;
+  id_departament employees.department_id%type;
+  id_manager employees.manager_id%type;
+  begin
+  id_departament := getDepartmentId( numeDepartament);
+  dbms_output.put_line(TO_CHAR(id_departament));
+  salariu := getMinSalary( id_departament);
+  dbms_output.put_line(TO_CHAR(salariu));
+  id_manager := getManagerId (firstNameManager, lastNameManager);
+  dbms_output.put_line(TO_CHAR(id_manager));
+
+  id_job := getJobId(numeJob);
+    dbms_output.put_line(TO_CHAR(id_job));
+
+  insert into emp_rm (employee_id, first_name, last_name , email, phone_number, hire_date, job_id, salary, commission_pct, manager_id, department_id) 
+  values (rm_sequence.nextval, nume, prenume, email, telefon, sysdate, id_job, salariu, NULL, id_manager, id_departament);
+   EXCEPTION
+        WHEN TOO_MANY_ROWS THEN
+            DBMS_OUTPUT.PUT_LINE('Au fost introduse prea multe date');
+        WHEN NO_DATA_FOUND THEN
+            DBMS_OUTPUT.PUT_LINE('Nu au fost gasite suficiente date de intrare sau managerul introdus nu exista!');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Alta eroare');
+  end adaugare_angajat;
+  
+  
+  --b)
+  
+  
+   procedure schimbare_departament (
+   nume employees.first_name%type,
+   prenume employees.last_name%type,
+   numeDepartament departments.department_name%type,
+   numeJob jobs.job_title%type,
+   firstNameManager employees.first_name%type,
+  lastNameManager employees.last_name%type
+  ) as 
+  salariu employees.salary%type;
+  id_job employees.job_id%type;
+  id_emp employees.employee_id%type;
+  id_departament employees.department_id%type;
+  salariu_vechi employees.salary%type;
+  id_manager employees.manager_id%type;
+  start_date employees.hire_date%type;
+  comision employees.commission_pct%type;
+  begin 
+  select hire_date, job_id, department_id, employee_id into start_date, id_job, id_departament, id_emp from employees e where nume = e.last_name and prenume = e.first_name;
+  insert into job_history values (id_emp, start_date, sysdate, id_job, id_departament);
+  select salary into salariu_vechi from employees e where nume = e.last_name and prenume = e.first_name;
+  id_departament := getDepartmentId( numeDepartament);
+  dbms_output.put_line(TO_CHAR(id_departament));
+  salariu := getMinSalary( id_departament);
+  dbms_output.put_line(TO_CHAR(salariu));
+  if salariu < salariu_vechi then
+   salariu := salariu_vechi;
+  end if;
+  id_manager := getManagerId (firstNameManager, lastNameManager);
+  dbms_output.put_line(TO_CHAR(id_manager));
+  select min(e.commission_pct) into comision from employees e join departments d on e.department_id = d.department_id where numeDepartament = d.department_name;
+  update emp_rm set hire_date = sysdate, job_id = id_job, salary = salariu, commission_pct = comision, manager_id = id_manager, department_id = id_departament where emp_rm.last_name = nume; 
+  id_job := getJobId(numeJob);
+    dbms_output.put_line(TO_CHAR(id_job));
+   EXCEPTION
+        WHEN TOO_MANY_ROWS THEN
+            DBMS_OUTPUT.PUT_LINE('Au fost returnate prea multe linii');
+        WHEN NO_DATA_FOUND THEN
+            DBMS_OUTPUT.PUT_LINE('Nu au fost gasite suficiente date de intrare, managerul introdus nu exista sau angajatul nu exista!');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Alta eroare');
+
+  end schimbare_departament;
+  
+  
+
+--c) 
+  function numarSubalterni(nume employees.last_name%type, prenume employees.first_name%type) return number
+  is 
+  numar int;
+  id_angajat employees.employee_id%type;
+  begin 
+  numar := 0;
+  select employee_id into id_angajat from employees e where nume = e.last_name and prenume = e.first_name;
+      select count(*)
+    into numar
+    from employees
+    start with employee_id = id_angajat
+    connect by prior employee_id = manager_id;
+    return numar;
+    EXCEPTION
+        WHEN TOO_MANY_ROWS THEN
+            DBMS_OUTPUT.PUT_LINE('Au fost returnate prea multe linii');
+        WHEN NO_DATA_FOUND THEN
+            DBMS_OUTPUT.PUT_LINE('Nu au fost gasite suficiente date de intrare sau sunt eronate!');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Alta eroare');
+  end numarSubalterni;
+  
+
+
+--d)
+  procedure promovareAngajat(
+  id_angajat employees.employee_id%type
+  )
+  is 
+  id_manager employees.manager_id%type;
+  manager_nou employees.manager_id%type;
+  begin
+  select manager_id into id_manager from employees e where e.employee_id = id_angajat;
+    select manager_id into manager_nou from employees e where e.employee_id = id_manager;
+  update emp_rm set manager_id = manager_nou where employee_id = id_angajat;
+  end promovareAngajat;
+
+
+--e)
+
+   procedure schimbare_salariu(
+  salariu employees.salary %type, 
+  nume employees.last_name%type)
+  is 
+  salariu_minim jobs.min_salary%type;
+  id_job employees.job_id%type;
+  begin 
+  select job_id into id_job from employees e where e.last_name = nume;
+  select min_salary into salariu_minim from jobs where id_job = job_id;
+  if salariu < salariu_minim then
+  dbms_output.put_line('Salariul este prea mic!');
+  else
+  update emp_rm set salary = salariu where emp_rm.last_name = nume;
+  end if;
+  end schimbare_salariu;
+
+  
+  function getMinSalary(
+  id_departament departments.department_id%type) return employees.salary%type as
+  salariu employees.salary%type;
+  begin
+    select min(salary) into salariu from employees e where e.department_id = id_departament;
+    return salariu;
+  end getMinSalary;
+  
+  
+  
+  function getManagerId( nume employees.last_name%type,prenume employees.first_name%type) return employees.manager_id%type as
+  id_manager employees.manager_id%type;
+  begin
+    select employee_id into id_manager from employees e where e.first_name = prenume and e.last_name = nume;
+    return id_manager;
+  end getManagerId;
+  
+  
+  function getDepartmentId(nume departments.department_name%type) return employees.department_id%type as
+  id_departament employees.department_id %type;
+  begin 
+    select department_id into id_departament from departments d where d.department_name = nume;
+    return id_departament;
+  end getDepartmentId;
+  
+  
+   function getJobId (nume jobs.job_title%type) return employees.job_id%type as
+   id_job employees.job_id%type;
+   begin
+     select job_id into id_job from jobs j where j.job_title = nume;
+     return id_job;
+   end getJobId;
+  
+  
+end pachet_rm;
+
+
+
+
+select pachet_rm.numarSubalterni('King', 'Steven') from dual;
+
+
+
+select count(*) from emp_rm;
+select * from departments;
+select * from jobs;
+select * from employees;
+select * from job_history;
+select * from emp_rm;
+insert into emp_rm values (200, 'Radu', 'Mocanu', 'a', 'b', sysdate, 'AD PRES', 23421, NULL, NULL, 90);
